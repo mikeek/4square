@@ -1,0 +1,308 @@
+﻿@model _4square.Models.ReferenceCounter
+
+@{
+    ViewBag.Title = "Brnosquare";
+}
+
+<div class="navbar navbar-inverse navbar-fixed-top" role="navigation">
+    <div class="container-fluid">
+        <div class="navbar-header">
+            <button type="button" class="navbar-toggle" data-toggle="collapse" data-target=".navbar-collapse">
+                <span class="sr-only">Toggle navigation</span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+                <span class="icon-bar"></span>
+            </button>
+        </div>
+        <div class="navbar-collapse collapse">
+            <ul class="nav navbar-nav navbar-left">
+
+                @if (Session["name"] == null)
+                {
+                    <li>
+                        <a href="https://foursquare.com/oauth2/authorize?v=@ViewBag.VERSION&client_id=@ViewBag.CLIENT_ID&response_type=code&redirect_uri=@Url.Action("Login", "Home", null, Request.Url.Scheme, null)">
+                            Login via Foursquare
+                        </a>
+                    </li>
+                }
+                else
+                {
+                    <li><a href="#">Logged as: @Session["name"].ToString()</a></li>
+                    <li>@Html.ActionLink("Logout", "Logout")</li>
+                }
+            </ul>
+        </div>
+    </div>
+</div>
+
+<script type="text/javascript" src="http://maps.google.com/maps/api/js?sensor=false"></script>
+<script src="~/Scripts/jquery-1.11.1.min.js"></script>
+<script src="~/Scripts/gmaps.js"></script>
+<script src="~/Scripts/jquery.validate.min.js"></script>
+<script src="~/Scripts/jquery.validate.unobtrusive.min.js"></script>
+
+<h2>Brnosquare</h2>
+
+@using (Html.BeginForm()) 
+{
+    @Html.AntiForgeryToken()
+
+    <div class="form-horizontal">
+        <h4>Search place in Brno at Foursquare</h4>
+        <hr/>
+
+        @if (ViewBag.references != null)
+        {
+            <text>"</text>@Html.ValueFor(model => model.placeToSearch)<text>" searched </text>
+            @ViewBag.references
+            <text> times</text>
+        }
+
+
+        @Html.ValidationSummary(true, "", new {@class = "text-danger"})
+        <div class="form-group">
+            @Html.LabelFor(model => model.placeToSearch, htmlAttributes: new {@class = "control-label col-md-2"})
+            <div class="col-md-3">
+                @Html.EditorFor(model => model.placeToSearch, new {htmlAttributes = new {@class = "form-control"}})
+                @Html.ValidationMessageFor(model => model.placeToSearch, "", new {@class = "text-danger"})
+            </div>
+            @Html.LabelFor(model => model.userLocation, htmlAttributes: new { @class = "control-label col-md-2" })
+            <div class="col-md-4">
+                <div class="checkbox">
+                    @Html.CheckBoxFor(model => model.userLocation)
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <div class="col-md-offset-2 col-md-3">
+                <div class="col-md-6">
+                    <input type="submit" name="Command" value="Search" class="btn btn-success btn-block"/>
+                </div>
+                <div class="col-md-6">
+                    <input type="submit" name="Command" value="Explore" class="btn btn-primary btn-block" />
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (ViewBag.references != null)
+{   
+    <div class="form-horizontal">
+        <div class="table-responsive">
+            <table id="results" data-toggle="table" class="table table-hover" data-card-view="false">
+                <colgroup>
+                    <col class="col-md-4">
+                    <col class="col-md-2">
+                    <col class="col-md-2">
+                    @if (Session["name"] != null)
+                    {
+                        <col class="col-md-4">
+                    }
+                </colgroup>
+
+                <thead>
+                <tr>
+                    <th data-field="name">Name</th>
+                    <th data-field="checkins">Check-ins</th>
+                    <th data-field="hereNow">Here now</th>
+                    @if (Session["name"] != null)
+                    {
+                        <th data-field="operations">Venue operations</th>
+                    }
+                </tr>
+                </thead>
+            </table>
+
+        </div>
+
+        <div id="moreDiv" class="form-group">
+            <br/>
+            <div class="col-md-offset-3 col-md-6">
+                <button id="more" type="button" class="btn btn-primary btn-block">Show more</button>
+            </div>
+        </div>
+        <br/>
+        <div class="col-md-offset-2">
+            <div id="map"></div>
+        </div>
+    </div>
+
+    <script>
+        var VERSION = "@ViewBag.VERSION";
+
+        var userLocation = "@ViewBag.userLocation";
+        var geoinfo = "&near=Brno";
+
+        var uri = "https://api.foursquare.com/v2/venues/explore" +
+            "?query=" + "@ViewBag.encodedPlace" +
+            "&v=" + VERSION +
+            "&client_id=" + "@ViewBag.CLIENT_ID" +
+            "&client_secret=" + "@ViewBag.CLIENT_SECRET";
+
+        var uriSearch = "https://api.foursquare.com/v2/venues/search" +
+            "?query=" + "@ViewBag.encodedPlace" +
+            "&v=" + VERSION +
+            "&client_id=" + "@ViewBag.CLIENT_ID" +
+            "&client_secret=" + "@ViewBag.CLIENT_SECRET";
+
+        var VENUES_PER_LOAD = 10;
+        var offset = 0;
+        var totalResults = 0;
+        var oauthToken = "@Session["token"]";
+        var map;
+       
+        $(document).ready(function () {
+            if (userLocation == "True" && navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(parseCurrentPosition);
+            } else {
+                // goto brno
+                map = new GMaps({
+                    div: '#map',
+                    lat: 49.193545,
+                    lng: 16.6157904,
+                    zoom: 12
+                });
+
+                loadData();
+            }
+        });
+
+        function parseCurrentPosition(position) {
+            map = new GMaps({
+                div: '#map',
+                lat: position.coords.latitude,
+                lng: position.coords.longitude,
+                zoom: 12
+            });
+
+            geoinfo = "&ll=" + position.coords.latitude + "," + position.coords.longitude;
+            loadData();
+        }
+
+        $('#more').click(loadData);
+
+        /* Load data - Explore api */
+        function loadData() {
+            var search = "@ViewBag.command" == "Search";
+
+            if (search == true) {
+                loadDataSearch();
+                return;
+            }
+
+            $('#moreDiv').hide();
+
+            $.ajax({
+                    url: uri + geoinfo + "&offset=" + offset + "&limit=" + VENUES_PER_LOAD,
+                    type: 'GET',
+                    dataType: 'json'
+                })
+                .success(fillTable)
+                .error(function(xhr, status) {
+                    console.log(status);
+                });
+        }
+
+        /* Load data - Search api */
+        function loadDataSearch() {
+            $('#moreDiv').hide();
+            $.ajax({
+                    url: uriSearch + geoinfo + "&limit=" + (offset + VENUES_PER_LOAD + 1),
+                    type: 'GET',
+                    dataType: 'json'
+                })
+                .success(fillTableSearch)
+                .error(function (xhr, status) {
+                    console.log(status);
+                });
+        }
+
+        /* Fill table - Explore api */
+        function fillTable(data) {
+            totalResults = data.response.totalResults;
+            if (totalResults === 0) {
+                return;
+            }
+
+            var items = data.response.groups[0].items;
+
+            for (var i = 0; i < items.length && i < VENUES_PER_LOAD; ++i) {
+                $('#results').bootstrapTable('append', createTableRow(items[i].venue));
+            }
+
+            updateOffset();
+        }
+
+        /* Fill table - Search api */
+        function fillTableSearch(data) {
+            var venues = data.response.venues;
+            totalResults = venues.length;
+
+            if (totalResults == 0) {
+                return;
+            }
+
+            for (var i = offset; i < venues.length && i < offset + VENUES_PER_LOAD; ++i) {
+                $('#results').bootstrapTable('append', createTableRow(venues[i]));
+            }
+
+            updateOffset();
+        }
+
+        /* Create table row from venue */
+        function createTableRow(venue) {
+            var checkinUri = "https://api.foursquare.com/v2/checkins/add?venueId=" + venue.id + "&v=" + VERSION + "&oauth_token=" + oauthToken;
+            var likeUri = "https://api.foursquare.com/v2/venues/" + venue.id + "/like?v=" + VERSION + "&oauth_token=" + oauthToken;
+            var dislikeUri = "https://api.foursquare.com/v2/venues/" + venue.id + "/dislike?v=" + VERSION + "&oauth_token=" + oauthToken;
+            var succLabelId = venue.id + "succ";
+            var failLabelId = venue.id + "fail";
+
+            /* Create table row */
+            var newRow =
+            {
+                name: "<a href='https://foursquare.com/v/" + venue.id + "' target='_blank'>" + venue.name + "</a>",
+                hereNow: venue.hereNow.count,
+                checkins: venue.stats.checkinsCount,
+                operations: "  <big><a onclick='sendPost(\"" + checkinUri + "\", \"" + succLabelId + "\", \"" + failLabelId + "\", \"Check-in\")' class='like' title='Check-in' href='#'><i class='glyphicon glyphicon-ok'></i></a>  " +
+                    "  <a onclick='sendPost(\"" + likeUri + "\", \"" + succLabelId + "\", \"" + failLabelId + "\", \"Like\")' class='like' title='Like' href='#'><i class='glyphicon glyphicon-thumbs-up'></i></a>  " +
+                    "  <a onclick='sendPost(\"" + dislikeUri + "\", \"" + succLabelId + "\", \"" + failLabelId + "\", \"Dislike\")' class='like' title='Dislike' href='#'><i class='glyphicon glyphicon-thumbs-down'></i></a>  " +
+                    "  <span id='" + succLabelId + "' class='label label-success'></span>" +
+                    "  <span id='" + failLabelId + "' class='label label-warning'></span></big>"
+            };
+
+            /* Create map marker */
+            map.addMarker({
+                lat: venue.location.lat,
+                lng: venue.location.lng,
+                title: venue.name,
+                infoWindow: {
+                    content: venue.name + ", <br/>" + venue.location.address
+                }
+            });
+
+            return newRow;
+        }
+
+        /* Send post request */
+        function sendPost(uri, succId, failId, operation) {
+            $.post(uri)
+                .done(function() {
+                    $("#" + succId).text(operation + " succeeded");
+                })
+                .fail(function() {
+                    $("#" + failId).text(operation + " failed");
+                });
+        }
+
+        function updateOffset() {
+            if (totalResults - offset > VENUES_PER_LOAD) {
+                offset += VENUES_PER_LOAD;
+                $('#moreDiv').show();
+            }
+        }
+
+    </script>
+}
+

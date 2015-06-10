@@ -1,0 +1,39 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>@ViewBag.Title</title>
+    <link href="~/Content/Site.css" rel="stylesheet" type="text/css"/>
+    <link href="~/Content/bootstrap.min.css" rel="stylesheet" type="text/css"/>
+    <link href="~/Content/bootstrap-table.min.css" rel="stylesheet" type="text/css"/>
+    <script src="~/Scripts/modernizr-2.6.2.js"></script>
+</head>
+
+<body>
+    <style>
+        /* Map */
+        #map {
+            width: 700px;
+            height: 400px;
+        }
+        /* Info window size (optional) */
+        .gomapMarker {
+            display: block;
+            width: 150px;
+            height: auto;
+        }
+    </style>
+
+<div class="container body-content">
+    @RenderBody()
+    <hr/>
+    <footer>
+        <p>&copy; @DateTime.Now.Year - Michal Kozubík</p>
+    </footer>
+</div>
+
+<script src="~/Scripts/bootstrap.min.js"></script>
+<script src="~/Scripts/bootstrap-table.min.js"></script>
+</body>
+</html>
